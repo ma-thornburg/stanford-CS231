@@ -74,7 +74,18 @@ class TwoLayerNet(object):
     # Store the result in the scores variable, which should be an array of      #
     # shape (N, C).                                                             #
     #############################################################################
-    pass
+    # Compute first layer outputs by applying W1, adding b1, and applying relu.
+    fl_multiply = np.dot(X, W1)
+    fl_multiply_and_add = fl_multiply + b1
+    first_layer_scores = np.maximum(0, fl_multiply_and_add)
+    
+    # Compute second layer outputs by applying W2 and adding b2
+    sl_multiply = np.dot(first_layer_scores, W2)
+    sl_scores = sl_multiply + b2
+    
+    # Update scores
+    scores = sl_scores
+    
     #############################################################################
     #                              END OF YOUR CODE                             #
     #############################################################################
@@ -93,6 +104,22 @@ class TwoLayerNet(object):
     # regularization loss by 0.5                                                #
     #############################################################################
     pass
+    # Compute Data Loss
+    f_y = np.choose(y, scores.T)
+    exp_scores = np.exp(scores)
+    sum_exp_scores = np.sum(exp_scores, axis=1)
+    log_sum = np.log(sum_exp_scores)
+    data_loss = (-1 * f_y) + log_sum
+    mean_data_loss = (data_loss).mean()
+    
+    # Add L2 Regularization Loss
+    W1_squared = np.square(W1)
+    reg_W1 = W1_squared.sum()
+    W2_squared = np.square(W2)
+    reg_W2 = W2_squared.sum()
+    reg_loss = (reg_W1 + reg_W2) * 0.5
+    reg_loss_with_strength = reg_loss * reg
+    loss = mean_data_loss + reg_loss_with_strength
     #############################################################################
     #                              END OF YOUR CODE                             #
     #############################################################################
@@ -104,7 +131,78 @@ class TwoLayerNet(object):
     # and biases. Store the results in the grads dictionary. For example,       #
     # grads['W1'] should store the gradient on W1, and be a matrix of same size #
     #############################################################################
-    pass
+    dloss = 1
+    
+    # loss = mean_data_loss + reg_loss_with_strength
+    dreg_loss_with_strength = dloss * 1
+    dmean_data_loss = dloss * 1
+    
+    # reg_loss_with_strength = reg_loss * reg
+    dreg_loss = reg * dreg_loss_with_strength
+    dreg = reg_loss * dreg_loss_with_strength
+    
+    # reg_loss = (reg_W1 + reg_W2) * 0.5
+    dreg_W1 = .5 * dreg_loss
+    dreg_W2 = .5 * dreg_loss
+    
+    # reg_W2 = W2_squared.sum()
+    dW2_squared = np.ones(W2_squared.shape) * dreg_W2
+    
+    # W2_squared = np.square(W2)
+    dW2 = dW2_squared * 2 * W2
+    
+    # reg_W1 = W1_squared.sum()
+    dW1_squared = np.ones(W1_squared.shape) * dreg_W1 
+    
+    # W1_squared = np.square(W1)
+    dW1 = 2 * W1 * dW1_squared
+    
+    # mean_data_loss = (data_loss).mean()
+    ddata_loss = np.true_divide(1, len(data_loss)) * np.ones(data_loss.shape) * dmean_data_loss 
+    
+    # data_loss = (-1 * f_y) + log_sum
+    df_y = -1 * ddata_loss
+    dlog_sum = 1 * ddata_loss
+    
+    # log_sum = np.log(sum_exp_scores)
+    dsum_exp_scores = np.true_divide(1, sum_exp_scores) * dlog_sum
+    
+    # sum_exp_scores = np.sum(exp_scores, axis=1)
+    dexp_scores = np.ones(exp_scores.shape) * dsum_exp_scores[:, np.newaxis]
+    
+    # exp_scores = np.exp(scores)
+    dscores = np.exp(scores) * dexp_scores
+    
+    # f_y = np.choose(y, scores.T)
+    _intermediate = np.zeros(scores.shape)
+    _intermediate[np.arange(scores.shape[0]), y] = 1.0
+    dscores += _intermediate * df_y[:, np.newaxis]
+    
+    # sl_scores = sl_multiply + b2
+    dsl_multiply = 1 * dscores
+    db2 = 1 * np.sum(dscores, axis=0)
+    
+    # sl_multiply = np.dot(first_layer_scores, W2)
+    dW2 += np.dot(first_layer_scores.T, dsl_multiply)
+    dfirst_layer_scores = np.dot(dsl_multiply,  W2.T)
+    
+    # first_layer_scores = np.maximum(0, fl_multiply_and_add)
+    dfl_multiply_and_add = (fl_multiply_and_add > 0).astype(int) * dfirst_layer_scores
+    
+    # fl_multiply_and_add = fl_multiply + b1
+    dfl_multiply = 1 * dfl_multiply_and_add
+    db1 = 1 * np.sum(dfl_multiply_and_add, axis=0)
+    
+    # fl_multiply = np.dot(X, W1)
+    dW1 += np.dot(X.T, dfl_multiply)
+    
+    # Update gradients
+    grads['W1'] = dW1
+    grads['W2'] = dW2
+    grads['b1'] = db1
+    grads['b2'] = db2
+    
+    
     #############################################################################
     #                              END OF YOUR CODE                             #
     #############################################################################
@@ -148,6 +246,9 @@ class TwoLayerNet(object):
       # TODO: Create a random minibatch of training data and labels, storing  #
       # them in X_batch and y_batch respectively.                             #
       #########################################################################
+      rand_indices = np.random.choice(num_train, batch_size, replace=False)
+      X_batch = X[rand_indices, :]
+      y_batch = y[rand_indices]
       pass
       #########################################################################
       #                             END OF YOUR CODE                          #
@@ -163,7 +264,11 @@ class TwoLayerNet(object):
       # using stochastic gradient descent. You'll need to use the gradients   #
       # stored in the grads dictionary defined above.                         #
       #########################################################################
-      pass
+      dW1, dW2, db1, db2 = grads['W1'], grads['W2'], grads['b1'], grads['b2']
+      self.params['W1'] += (-1) * learning_rate * grads['W1']
+      self.params['W2'] += (-1) * learning_rate * grads['W2']
+      self.params['b1'] += (-1) * learning_rate * grads['b1']
+      self.params['b2'] += (-1) * learning_rate * grads['b2']
       #########################################################################
       #                             END OF YOUR CODE                          #
       #########################################################################
@@ -208,7 +313,7 @@ class TwoLayerNet(object):
     ###########################################################################
     # TODO: Implement this function; it should be VERY simple!                #
     ###########################################################################
-    pass
+    y_pred = np.argmax(self.loss(X), axis=1)
     ###########################################################################
     #                              END OF YOUR CODE                           #
     ###########################################################################
