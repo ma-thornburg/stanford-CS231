@@ -223,7 +223,21 @@ class FullyConnectedNet(object):
     # beta2, etc. Scale parameters should be initialized to one and shift      #
     # parameters should be initialized to zero.                                #
     ############################################################################
-    pass
+    # Initialize Paramaters for layers.
+    prev_input_dim = input_dim
+    for index, hidden_dim in enumerate(hidden_dims):
+        self.params['W' + str(index + 1)] = (
+            np.random.normal(0, weight_scale, (prev_input_dim, hidden_dim))
+        )
+        self.params['b' + str(index + 1)] = (
+            np.zeros(hidden_dim)
+        )
+        prev_input_dim = hidden_dim
+    
+    # Initialize Paramaters for output layer. 
+    self.params['W' + str(self.num_layers)] = np.random.normal(0, weight_scale, (prev_input_dim, num_classes))
+    self.params['b' + str(self.num_layers)] = np.zeros(num_classes)
+    
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -281,7 +295,26 @@ class FullyConnectedNet(object):
     # self.bn_params[1] to the forward pass for the second batch normalization #
     # layer, etc.                                                              #
     ############################################################################
-    pass
+    intermediate_X = X
+    network_caches = {}
+    for index in range(1, self.num_layers):
+        # Lookup the layers paramaters.
+        W, b = self.params['W' + str(index)], self.params['b' + str(index)]
+        
+        # Compute this layers affine relu output and forward pass caches. 
+        out, cache = affine_relu_forward(intermediate_X, W, b)
+        
+        # Store this layers cache. 
+        network_caches[index] = cache
+        
+        # Update intermediate_X
+        intermediate_X = out
+     
+    # Produce score for last layer. 
+    W, b = self.params['W' + str(self.num_layers)], self.params['b' + str(self.num_layers)]
+    scores, cache = affine_forward(intermediate_X, W, b)
+    network_caches[self.num_layers] = cache
+        
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -304,7 +337,53 @@ class FullyConnectedNet(object):
     # automated tests, make sure that your L2 regularization includes a factor #
     # of 0.5 to simplify the expression for the gradient.                      #
     ############################################################################
-    pass
+    scores_loss, scores_local_grad = softmax_loss(scores, y)
+    reg_loss = 0 
+    for index in range(1, self.num_layers + 1):
+        reg_loss += np.sum(np.square(self.params['W' + str(index)]))
+    reg_loss *= (0.5 * self.reg)
+    loss = reg_loss + scores_loss
+    
+    dloss = 1 
+    dreg_loss = dloss * 1
+    dscores_loss = dloss * 1
+    
+    # reg_loss = 0 
+    # for index in range(1, self.num_layers):
+    #    reg_loss += np.sum(np.square(self.params['W' + str(index)]))
+    # reg_loss += np.sum(np.square('Wfinal'))
+    # reg_loss *= (0.5 * reg)
+    for index in range(1, self.num_layers + 1):
+        grads['W' + str(index)] = dreg_loss * self.reg * self.params['W' + str(index)]
+        
+    # scores_loss, scores_local_grad = softmax_loss(scores, y)
+    dscores = dscores_loss * scores_local_grad
+    
+    # W, b = self.params['W' + str(self.num_layers)], self.params['b' + str(self.num_layers)]
+    #scores, cache = affine_forward(intermediate_X, W, b)
+    bp = affine_backward(dscores, network_caches[self.num_layers])
+    grads['W' + str(self.num_layers)] += bp[1]
+    grads['b' + str(self.num_layers)] = bp[2]
+    
+    
+    #intermediate_X = X
+    #network_caches = {}
+    #for index in range(1, self.num_layers):
+        ## Lookup the layers paramaters.
+        # W, b = self.params['W' + str(index)], self.params['b' + str(index)]
+        ## Compute this layers affine relu output and forward pass caches. 
+        #out, cache = affine_relu_forward(intermediate_X, W, b)
+        ## Store this layers cache. 
+        # network_caches[index] = cache
+        ## Update intermediate_X
+        #intermediate_X = out
+    prev_dout = bp[0]
+    for index in reversed(range(1, self.num_layers)):
+        bp = affine_relu_backward(prev_dout, network_caches[index])
+        grads['W' + str(index)] += bp[1]
+        grads['b' + str(index)] = bp[2]
+        prev_dout = bp[0]
+        
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
