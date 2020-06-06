@@ -65,7 +65,9 @@ def sgd_momentum(w, dw, config=None):
   # TODO: Implement the momentum update formula. Store the updated value in   #
   # the next_w variable. You should also use and update the velocity v.       #
   #############################################################################
-  pass
+  v = config['momentum'] * v - config['learning_rate'] * dw
+  next_w = w + v
+  #config['velocity'] += w
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -93,17 +95,18 @@ def rmsprop(x, dx, config=None):
   config.setdefault('epsilon', 1e-8)
   config.setdefault('cache', np.zeros_like(x))
 
-  next_x = None
+  next_x = x
   #############################################################################
   # TODO: Implement the RMSprop update formula, storing the next value of x   #
   # in the next_x variable. Don't forget to update cache value stored in      #  
   # config['cache'].                                                          #
   #############################################################################
-  pass
+  config['cache'] = (config['decay_rate'] * config['cache']) + ((1 - config['decay_rate']) * (dx**2))
+  next_x += np.true_divide((-1 * config['learning_rate'] * dx), (np.sqrt(config['cache']) + config[('epsilon')]))                                      
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
-
+  
   return next_x, config
 
 
@@ -130,13 +133,26 @@ def adam(x, dx, config=None):
   config.setdefault('v', np.zeros_like(x))
   config.setdefault('t', 0)
   
-  next_x = None
+  next_x = x
   #############################################################################
   # TODO: Implement the Adam update formula, storing the next value of x in   #
   # the next_x variable. Don't forget to update the m, v, and t variables     #
   # stored in config.                                                         #
   #############################################################################
-  pass
+  config['t'] = config['t'] + 1
+  config['m'] = (config['m'] * config['beta1']) + (1 - config['beta1'])*dx
+  mt = np.true_divide(
+      config['m'], 
+      1 - (config['beta1']**config['t'])
+  )
+  config['v'] = (config['beta2'] * config['v']) + ((1 - config['beta2']) * (dx**2))
+  vt = np.true_divide(
+      config['v'], 
+      1 - (config['beta2']**config['t'])
+  )
+  next_x += (
+      ((-1 * config['learning_rate']) * mt) / (np.sqrt(vt) + config['epsilon'])
+  )
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
