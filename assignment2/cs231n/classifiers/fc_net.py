@@ -301,6 +301,7 @@ class FullyConnectedNet(object):
     ############################################################################
     intermediate_X = X
     network_caches = {}
+    dropout_caches = {}
     for index in range(1, self.num_layers):
         # Lookup the layers paramaters.
         W, b = self.params['W' + str(index)], self.params['b' + str(index)]
@@ -313,6 +314,11 @@ class FullyConnectedNet(object):
             out, cache = affine_relu_bn_forward(intermediate_X, W, b, gamma, beta, bn_param)
         else:
             out, cache = affine_relu_forward(intermediate_X, W, b)
+            
+        if self.use_dropout:
+            dout, dcache = dropout_forward(out, self.dropout_param)
+            dropout_caches[index] = dcache
+            out = dout
         
         # Store this layers cache. 
         network_caches[index] = cache
@@ -389,6 +395,10 @@ class FullyConnectedNet(object):
         #intermediate_X = out
     prev_dout = bp[0]
     for index in reversed(range(1, self.num_layers)):
+        if self.use_dropout:
+            drelu_out = dropout_backward(prev_dout, dropout_caches[index])
+            prev_dout = drelu_out
+            
         if self.use_batchnorm:
             bp = affine_relu_bn_backward(prev_dout, network_caches[index])
             grads['gamma' + str(index)] = bp[3]
