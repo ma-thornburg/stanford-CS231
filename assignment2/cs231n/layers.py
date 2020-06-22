@@ -405,23 +405,85 @@ def conv_forward_naive(x, w, b, conv_param):
 
   Returns a tuple of:
   - out: Output data, of shape (N, F, H', W') where H' and W' are given by
+     1 + (4 + 2*1 - 4) / 2 = 3
     H' = 1 + (H + 2 * pad - HH) / stride
     W' = 1 + (W + 2 * pad - WW) / stride
   - cache: (x, w, b, conv_param)
   """
+   
   out = None
+  pad = conv_param['pad']
+  stride = conv_param['stride']
+  N = x.shape[0]
+  C = x.shape[1]
+  H = x.shape[2]
+  W = x.shape[3]
+  F = w.shape[0]
+  FILTER_HEIGHT = w.shape[2]
+  FILTER_WIDTH = w.shape[3]
+  H_prime = int(1 + np.true_divide(H + 2 * pad - FILTER_HEIGHT, stride))
+  W_prime = int(1 + np.true_divide(W + 2 * pad - FILTER_WIDTH,  stride))
+  out = np.zeros((N, F, H_prime, W_prime))
   #############################################################################
   # TODO: Implement the convolutional forward pass.                           #
   # Hint: you can use the function np.pad for padding.                        #
   #############################################################################
-  pass
+  for example_index in range(0, x.shape[0]):
+        example = np.pad(x[example_index], pad_width=((0, 0), (pad, pad), (pad, pad)), mode='constant')
+        example_height = example.shape[1]
+        example_width = example.shape[2]
+        
+        # Iterate over each filter. 
+        for filter_index in range(0, w.shape[0]):
+            current_w = w[filter_index]
+            
+            start_i = 0
+            start_j = 0
+            out_i = 0
+            out_j = 0
+            while(start_i + FILTER_HEIGHT <= example_height):
+                # Get example volume at start_i, start_j. 
+                current_X = example[
+                    :, 
+                    start_i: start_i + FILTER_HEIGHT, 
+                    start_j: start_j + FILTER_WIDTH
+                ]
+                current_result = np.sum(current_X * current_w) + b[filter_index]
+                
+                # Update out
+                out[example_index, filter_index, out_i, out_j] = current_result 
+         
+                # Code to organize the update
+                if start_j + FILTER_WIDTH >= example_width:
+                    start_i += stride
+                    start_j = 0
+                else:
+                    start_j += stride
+                if out_j == W_prime - 1:
+                    out_i += 1
+                    out_j = 0
+                else:
+                    out_j += 1
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
   cache = (x, w, b, conv_param)
   return out, cache
 
+def is_pad_coordinate(i, j, pad, padded_dim):
+    if (
+        i < pad or 
+        i >= padded_dim[0] - pad or 
+        j < pad or 
+        j >= padded_dim[1] - pad
+    ):
+        return True
+    else:
+        return False
 
+def padded_coordinate_to_reg(pad_i, pad_j, pad):
+    return (pad_i - pad, pad_j - pad)
+    
 def conv_backward_naive(dout, cache):
   """
   A naive implementation of the backward pass for a convolutional layer.
@@ -435,11 +497,81 @@ def conv_backward_naive(dout, cache):
   - dw: Gradient with respect to w
   - db: Gradient with respect to b
   """
-  dx, dw, db = None, None, None
+  x, w, b, conv_param = cache
+  pad = conv_param['pad']
+  stride = conv_param['stride']
+  N = x.shape[0]
+  C = x.shape[1]
+  H = x.shape[2]
+  W = x.shape[3]
+  F = w.shape[0]
+  C = w.shape[1]
+  FILTER_HEIGHT = w.shape[2]
+  FILTER_WIDTH = w.shape[3]
+  H_prime = int(1 + np.true_divide(H + 2 * pad - FILTER_HEIGHT, stride))
+  W_prime = int(1 + np.true_divide(W + 2 * pad - FILTER_WIDTH,  stride))
+  out = np.zeros((N, F, H_prime, W_prime))
+  dx, dw, db = np.zeros(x.shape), np.zeros(w.shape), np.zeros(b.shape)
   #############################################################################
   # TODO: Implement the convolutional backward pass.                          #
   #############################################################################
-  pass
+  for example_index in range(0, x.shape[0]):
+      example = np.pad(x[example_index], pad_width=((0, 0), (pad, pad), (pad, pad)), mode='constant')
+      example_height = example.shape[1]
+      example_width = example.shape[2]
+
+      # Iterate over each filter. 
+      for filter_index in range(0, w.shape[0]):
+          current_w = w[filter_index]
+
+          start_i = 0
+          start_j = 0
+          out_i = 0
+          out_j = 0
+          while(start_i + FILTER_HEIGHT <= example_height):
+              # Get example volume at start_i, start_j. 
+              current_X = example[
+                  :, 
+                  start_i: start_i + FILTER_HEIGHT, 
+                  start_j: start_j + FILTER_WIDTH
+              ]
+              current_result = np.sum(current_X * current_w) + b[filter_index]
+              
+              # Update dw 
+              dw[filter_index, :, :, :] += current_X * dout[example_index, filter_index, out_i, out_j]
+              
+              # Update dx 
+              #print(dout[example_index, filter_index, out_i, out_j], dout[example_index, filter_index, out_i, out_j].shape)
+              padded_update = current_w * dout[example_index, filter_index, out_i, out_j]
+              for pad_c in range(0, C):
+                for pad_i in range(start_i, start_i + FILTER_HEIGHT):
+                    for pad_j in range(start_j, start_j + FILTER_WIDTH):
+                        if not is_pad_coordinate(pad_i, pad_j, pad, (example_height, example_width)):
+                            mapped_i, mapped_j = padded_coordinate_to_reg(pad_i, pad_j, pad)
+                            #print("dx shape", dx.shape)
+                            #print("dx indices access", example_index, pad_c, mapped_i, mapped_j)
+                            dx[example_index, pad_c, mapped_i, mapped_j] += (
+                                current_w[pad_c, pad_i - start_i, pad_j - start_j] * 
+                                dout[example_index, filter_index, out_i, out_j]
+                            )
+            
+              # Update b
+              db[filter_index] += dout[example_index, filter_index, out_i, out_j]
+              
+              # Update out
+              out[example_index, filter_index, out_i, out_j] = current_result 
+
+              # Code to organize the update
+              if start_j + FILTER_WIDTH >= example_width:
+                  start_i += stride
+                  start_j = 0
+              else:
+                  start_j += stride
+              if out_j == W_prime - 1:
+                  out_i += 1
+                  out_j = 0
+              else:
+                  out_j += 1
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
