@@ -593,11 +593,55 @@ def max_pool_forward_naive(x, pool_param):
   - out: Output data
   - cache: (x, pool_param)
   """
-  out = None
+  stride = pool_param['stride']
+  N = x.shape[0]
+  C = x.shape[1]
+  H = x.shape[2]
+  W = x.shape[3]
+  POOL_HEIGHT = pool_param['pool_height']
+  POOL_WIDTH = pool_param['pool_width']
+  X_HEIGHT = x.shape[2]
+  X_WIDTH = x.shape[3]
+  H_prime = int(1 + np.true_divide(H - POOL_HEIGHT, stride))
+  W_prime = int(1 + np.true_divide(W - POOL_WIDTH,  stride))
+  out = np.zeros((N, C, H_prime, W_prime))
   #############################################################################
   # TODO: Implement the max pooling forward pass                              #
   #############################################################################
-  pass
+  for example_index in range(0, N):
+          example = x[example_index]
+
+          # Iterate over each volume. 
+          for volume_index in range(0, C):
+
+              start_i = 0
+              start_j = 0
+              out_i = 0
+              out_j = 0
+              while(start_i + POOL_HEIGHT <= X_HEIGHT):
+                  # Get example volume at start_i, start_j. 
+                  current_X = example[
+                      volume_index, 
+                      start_i: start_i + POOL_HEIGHT, 
+                      start_j: start_j + POOL_WIDTH
+                  ]
+                  current_result = np.max(current_X)
+
+                  # Update out
+                  out[example_index, volume_index, out_i, out_j] = current_result 
+
+                  # Code to organize the update
+                  if start_j + POOL_WIDTH >= X_WIDTH:
+                      start_i += stride
+                      start_j = 0
+                  else:
+                      start_j += stride
+                  if out_j == W_prime - 1:
+                      out_i += 1
+                      out_j = 0
+                  else:
+                      out_j += 1
+    
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
@@ -616,11 +660,71 @@ def max_pool_backward_naive(dout, cache):
   Returns:
   - dx: Gradient with respect to x
   """
-  dx = None
+  x, pool_param = cache
+  stride = pool_param['stride']
+  N = x.shape[0]
+  C = x.shape[1]
+  H = x.shape[2]
+  W = x.shape[3]
+  POOL_HEIGHT = pool_param['pool_height']
+  POOL_WIDTH = pool_param['pool_width']
+  X_HEIGHT = x.shape[2]
+  X_WIDTH = x.shape[3]
+  H_prime = int(1 + np.true_divide(H - POOL_HEIGHT, stride))
+  W_prime = int(1 + np.true_divide(W - POOL_WIDTH,  stride))
+  out = np.zeros((N, C, H_prime, W_prime))
+  dx = np.zeros(x.shape)
   #############################################################################
-  # TODO: Implement the max pooling backward pass                             #
+  # TODO: Implement the max pooling backward pass                              #
   #############################################################################
-  pass
+  for example_index in range(0, N):
+          example = x[example_index]
+
+          # Iterate over each volume. 
+          for volume_index in range(0, C):
+
+              start_i = 0
+              start_j = 0
+              out_i = 0
+              out_j = 0
+              while(start_i + POOL_HEIGHT <= X_HEIGHT):
+                  # Get example volume at start_i, start_j. 
+                  current_X = example[
+                      volume_index, 
+                      start_i: start_i + POOL_HEIGHT, 
+                      start_j: start_j + POOL_WIDTH
+                  ]
+                  current_max_index = np.argmax(current_X)
+                  max_i, max_j = current_max_index / current_X.shape[0], (current_max_index % current_X.shape[0])
+                  #print(max_i, max_j, current_max_index, current_X.shape)
+                  update_x = np.zeros(current_X.shape)
+                  #print("update_X shape", update_x.shape)
+                  update_x[max_i, max_j] = dout[example_index, volume_index, out_i, out_j]
+
+                  # Update out
+                  current_result = np.max(current_X)
+                  out[example_index, volume_index, out_i, out_j] = current_result 
+                  
+                  # Update dx. 
+                  #print(update_x.shape)
+                  dx[
+                    example_index,
+                    volume_index, 
+                    start_i: start_i + POOL_HEIGHT, 
+                    start_j: start_j + POOL_WIDTH
+                  ] += update_x
+
+                  # Code to organize the update
+                  if start_j + POOL_WIDTH >= X_WIDTH:
+                      start_i += stride
+                      start_j = 0
+                  else:
+                      start_j += stride
+                  if out_j == W_prime - 1:
+                      out_i += 1
+                      out_j = 0
+                  else:
+                      out_j += 1
   #############################################################################
   #                             END OF YOUR CODE                              #
   #############################################################################
