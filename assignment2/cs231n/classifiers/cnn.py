@@ -47,7 +47,28 @@ class ThreeLayerConvNet(object):
     # hidden affine layer, and keys 'W3' and 'b3' for the weights and biases   #
     # of the output affine layer.                                              #
     ############################################################################
-    pass
+    # Conv Setup
+    # H' = 1 + (H + 2 * pad - HH) / stride 
+    # W' = 1 + (W + 2 * pad - WW) / stride 
+    stride = 1
+    pad = (filter_size - 1) / 2
+    H_prime = 1 + (input_dim[1] + 2 * pad - filter_size) / stride
+    W_prime = 1 + (input_dim[2] + 2 * pad - filter_size) / stride
+    H_prime2 = 1 + (H_prime - 2) / 2
+    W_prime2 = 1 + (W_prime - 2) / 2
+    print(H_prime2, W_prime2)
+    
+    # Conv Layer
+    self.params['W1'] = np.random.normal(0, weight_scale, (num_filters, input_dim[0], filter_size, filter_size))
+    self.params['b1'] = np.zeros(num_filters)
+    
+    # First Affine Layer
+    self.params['W2'] = np.random.normal(0, weight_scale, (num_filters * H_prime2 * W_prime2, hidden_dim))
+    self.params['b2'] = np.zeros(hidden_dim)
+    
+    # Second Affine Layer
+    self.params['W3'] = np.random.normal(0, weight_scale, (hidden_dim, num_classes))
+    self.params['b3'] = np.zeros(num_classes)
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -65,6 +86,7 @@ class ThreeLayerConvNet(object):
     W1, b1 = self.params['W1'], self.params['b1']
     W2, b2 = self.params['W2'], self.params['b2']
     W3, b3 = self.params['W3'], self.params['b3']
+    reg = self.reg 
     
     # pass conv_param to the forward pass for the convolutional layer
     filter_size = W1.shape[2]
@@ -79,7 +101,14 @@ class ThreeLayerConvNet(object):
     # computing the class scores for X and storing them in the scores          #
     # variable.                                                                #
     ############################################################################
-    pass
+    # Conv
+    conv_forward_output, conv_cache = conv_relu_pool_forward(X, W1, b1, conv_param, pool_param)
+    
+    # Affine 1 
+    affine1_forward_output, affine1_cache = affine_relu_forward(conv_forward_output, W2, b2)
+    
+    # Affine 2 
+    scores, affine2_cache = affine_forward(affine1_forward_output, W3, b3)
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
@@ -94,7 +123,51 @@ class ThreeLayerConvNet(object):
     # data loss using softmax, and make sure that grads[k] holds the gradients #
     # for self.params[k]. Don't forget to add L2 regularization!               #
     ############################################################################
-    pass
+    # Scores Loss / Grad
+    scores_loss, scores_local_grad = softmax_loss(scores, y)
+    
+    # Reg Loss - Skip biases in reg loss
+    reg_loss = (
+        np.sum(W1 * W1) + 
+        np.sum(W2 * W2) +
+        np.sum(W3 * W3) 
+    ) * reg
+    loss = scores_loss + reg_loss
+    
+    dloss = 1
+    
+    # loss = scores_loss + reg_loss
+    dscores_loss = np.ones(scores_loss.shape) * dloss
+    dreg_loss = np.ones(reg_loss.shape) * dloss
+    
+    # reg_loss = (
+    #    np.sum(W1 * W1) + 
+    #    np.sum(W2 * W2) +
+    #    np.sum(W3 * W3) + 
+    # ) * reg
+    grads['W1'] = 2 * W1 * reg * dreg_loss 
+    grads['W2'] = 2 * W2 * reg * dreg_loss
+    grads['W3'] = 2 * W3 * reg * dreg_loss
+    
+    # scores_loss, scores_local_grad = softmax_loss(scores, y)
+    dscores = scores_local_grad * dscores_loss
+    
+    # scores, affine2_cache = affine_forward(affine1_forward_output, W3, b3)
+    bp3 = affine_backward(dscores, affine2_cache)
+    daffine1_forward_output = bp3[0]
+    grads['W3'] += bp3[1]
+    grads['b3'] = bp3[2]
+    
+    # affine1_forward_output, affine1_cache = affine_relu_forward(conv_forward_output, W2, b2)
+    bp2 = affine_relu_backward(daffine1_forward_output, affine1_cache)
+    dconv_forward_output = bp2[0]
+    grads['W2'] += bp2[1]
+    grads['b2'] = bp2[2]
+    
+    # conv_forward_output, conv_cache = conv_relu_pool_forward(X, W1, b1, conv_param, pool_param)
+    bp1 = conv_relu_pool_backward(dconv_forward_output, conv_cache)
+    grads['W1'] += bp1[1]
+    grads['b1'] = bp1[2]
     ############################################################################
     #                             END OF YOUR CODE                             #
     ############################################################################
