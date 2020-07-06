@@ -108,3 +108,45 @@ def conv_relu_pool_backward(dout, cache):
   dx, dw, db = conv_backward_fast(da, conv_cache)
   return dx, dw, db
 
+def conv_bn_relu_conv_bn_relu_pool_forward(x, w1, b1, gamma1, beta1, w2, b2, gamma2, beta2, conv_param1, bn_param1, conv_param2, bn_param2, pool_param1):
+    """
+    Forward pass for conv-bn-relu-conv-bn-relu-pool layer.
+    """
+    first_conv_output, first_conv_cache = conv_forward_fast(x, w1, b1, conv_param1)
+    first_bn_output, first_bn_cache = spatial_batchnorm_forward(first_conv_output, gamma1, beta1, bn_param1)
+    first_relu_output, first_relu_cache = relu_forward(first_bn_output)
+    #print("FP1", first_conv_output.shape)
+    
+    second_conv_output, second_conv_cache = conv_forward_fast(first_relu_output, w2, b2, conv_param2)
+    second_bn_output, second_bn_cache = spatial_batchnorm_forward(second_conv_output, gamma2, beta2, bn_param2)
+    second_relu_output, second_relu_cache = relu_forward(second_bn_output)
+    #print("FP2", second_conv_output.shape)
+    
+    out, pool_cache = max_pool_forward_fast(second_relu_output, pool_param1)
+    #print("out shape", out.shape)
+    
+    cache = (
+        first_conv_cache, first_bn_cache, first_relu_cache, second_conv_cache, 
+        second_bn_cache, second_relu_cache, pool_cache
+    )
+    
+    return out, cache
+
+def conv_bn_relu_conv_bn_relu_pool_backward(dout, cache):
+    """
+    Backward pass for conv-bn-relu-conv-bn-relu-pool layer. 
+    """
+    first_conv_cache, first_bn_cache, first_relu_cache, second_conv_cache, second_bn_cache, second_relu_cache, pool_cache = cache
+    
+    pool_bp = max_pool_backward_fast(dout, pool_cache)
+    second_relu_bp = relu_backward(pool_bp, second_relu_cache)
+    second_bn_bp, dgamma2, dbeta2, = spatial_batchnorm_backward(second_relu_bp, second_bn_cache)
+    second_conv_bp, dw2, db2 = conv_backward_fast(second_bn_bp, second_conv_cache)
+    first_relu_bp = relu_backward(second_conv_bp, first_relu_cache)
+    first_bn_bp, dgamma1, dbeta1 = spatial_batchnorm_backward(first_relu_bp, first_bn_cache)
+    dx, dw1, db1 = conv_backward_fast(first_bn_bp, first_conv_cache)
+    
+    return dx, dw1, db1, dgamma1, dbeta1, dw2, db2, dgamma2, dbeta2
+    
+    
+                          
